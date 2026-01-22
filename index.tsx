@@ -305,34 +305,39 @@ const loadSettings = () => {
     };
 
     if (saved) {
-        const parsed = JSON.parse(saved);
-        
-        // Merge saved Regex Rules with any new Defaults
-        if (parsed.regexRules) {
-             const savedRulesFormatted = parsed.regexRules.map((r: any) => ({
-                 ...r,
-                 name: r.name || r.id,
-                 enabled: r.enabled !== false
-             }));
-             const savedIds = new Set(savedRulesFormatted.map((r: any) => r.id));
-             const newRules = DEFAULT_REGEX_RULES.filter(r => !savedIds.has(r.id));
-             
-             settings.regexRules = [...savedRulesFormatted, ...newRules];
-        }
+        try {
+            const parsed = JSON.parse(saved);
+            
+            // Merge saved Regex Rules with any new Defaults
+            if (parsed.regexRules && Array.isArray(parsed.regexRules)) {
+                 const savedRulesFormatted = parsed.regexRules.map((r: any) => ({
+                     ...r,
+                     name: r.name || r.id,
+                     enabled: r.enabled !== false
+                 }));
+                 const savedIds = new Set(savedRulesFormatted.map((r: any) => r.id));
+                 const newRules = DEFAULT_REGEX_RULES.filter(r => !savedIds.has(r.id));
+                 
+                 settings.regexRules = [...savedRulesFormatted, ...newRules];
+            }
 
-        // Merge saved Usage Presets with any new Defaults
-        if (parsed.usagePresets) {
-             const savedIds = new Set(parsed.usagePresets.map((p: any) => p.id));
-             const newPresets = DEFAULT_USAGE_PRESETS.filter(p => !savedIds.has(p.id));
-             settings.usagePresets = [...parsed.usagePresets, ...newPresets];
-        }
+            // Merge saved Usage Presets with any new Defaults
+            if (parsed.usagePresets && Array.isArray(parsed.usagePresets)) {
+                 const savedIds = new Set(parsed.usagePresets.map((p: any) => p.id));
+                 const newPresets = DEFAULT_USAGE_PRESETS.filter(p => !savedIds.has(p.id));
+                 settings.usagePresets = [...parsed.usagePresets, ...newPresets];
+            }
 
-        if (parsed.baseSystemPrompt) {
-            settings.baseSystemPrompt = parsed.baseSystemPrompt;
-        }
-        
-        if (parsed.ttsVoiceURI) {
-            settings.ttsVoiceURI = parsed.ttsVoiceURI;
+            if (parsed.baseSystemPrompt) {
+                settings.baseSystemPrompt = parsed.baseSystemPrompt;
+            }
+            
+            if (parsed.ttsVoiceURI) {
+                settings.ttsVoiceURI = parsed.ttsVoiceURI;
+            }
+        } catch (e) {
+            console.error("Failed to parse settings", e);
+            // Fallback to defaults (already set)
         }
     }
     return settings;
@@ -516,8 +521,6 @@ const SettingsModal = ({
         if (regexMode === 'builder') {
             const keywords = builderKeywords.split(/[,、\s]+/).filter(k => k.trim());
             if (keywords.length === 0) {
-                // Do not clear patternStr immediately to avoid bad UX, or maybe clear it?
-                // setRegexForm(prev => ({...prev, patternStr: ''}));
                 return;
             }
             
@@ -863,6 +866,106 @@ ${usageForm.prompt}
                                             )}
                                             <button onClick={() => setIsEditingRule(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded">キャンセル</button>
                                             <button onClick={saveRegexRule} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">保存</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {activeTab === 'usage' && (
+                        <div className="space-y-6">
+                            {!isEditingPreset && (
+                                <div className="mb-6">
+                                    <div className="bg-slate-100 p-4 rounded-lg border border-slate-200">
+                                        <h3 className="text-sm font-bold text-slate-700 mb-2">共通ベースプロンプト</h3>
+                                        <textarea 
+                                            className="w-full h-24 p-2 text-xs text-slate-600 border border-slate-300 rounded bg-white resize-none"
+                                            value={basePrompt}
+                                            onChange={handleBasePromptChange}
+                                            onBlur={saveBasePrompt}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {!isEditingPreset ? (
+                                <>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h3 className="text-sm font-bold text-slate-700">用途プリセット一覧</h3>
+                                        <button onClick={() => openUsageEdit()} className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 flex items-center gap-1">
+                                            <PlusIcon className="w-3 h-3" /> 追加
+                                        </button>
+                                    </div>
+                                    <div className="grid gap-3">
+                                        {presets && presets.length > 0 ? (
+                                            presets.map(preset => (
+                                                <div key={preset.id} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm group">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h4 className="font-bold text-slate-800">{preset.name}</h4>
+                                                        <div className="flex gap-1">
+                                                            <button onClick={() => openUsageEdit(preset)} className="p-1 text-slate-400 hover:text-blue-600">
+                                                                <EditIcon className="w-4 h-4" />
+                                                            </button>
+                                                            <button onClick={() => deleteUsagePreset(preset.id)} className="p-1 text-slate-400 hover:text-red-500">
+                                                                <TrashIcon className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="bg-slate-50 p-2 rounded text-xs text-slate-600 leading-relaxed border border-slate-100 max-h-24 overflow-hidden relative">
+                                                        <pre className="whitespace-pre-wrap font-sans">{preset.prompt}</pre>
+                                                        <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-slate-50 to-transparent pointer-events-none"></div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-6 text-slate-400 text-sm bg-slate-100 rounded border border-dashed border-slate-300">
+                                                プリセットがありません
+                                            </div>
+                                        )}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                                    <h3 className="text-base font-bold text-slate-700 mb-4">
+                                        {editingPresetId ? '用途を編集' : '新規用途作成'}
+                                    </h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">用途名</label>
+                                            <input type="text" className="w-full px-3 py-2 border border-slate-300 rounded text-sm" value={usageForm.name} onChange={e => setUsageForm({...usageForm, name: e.target.value})} placeholder="例: 社内日報" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1">AIへの指示（プロンプト）</label>
+                                            <div className="relative">
+                                                <textarea 
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded text-sm h-64 resize-none leading-relaxed"
+                                                    value={usageForm.prompt}
+                                                    onChange={e => setUsageForm({...usageForm, prompt: e.target.value})}
+                                                    placeholder="ここにAIへの詳細な指示を記述します..."
+                                                />
+                                            </div>
+                                            <div className="mt-2 flex justify-end">
+                                                <button 
+                                                    onClick={handleOptimizePrompt}
+                                                    disabled={isOptimizing || !usageForm.prompt}
+                                                    className={`flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-lg border transition-all ${
+                                                        isOptimizing || !usageForm.prompt
+                                                        ? 'bg-slate-100 text-slate-400 border-slate-200'
+                                                        : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                                                    }`}
+                                                >
+                                                    {isOptimizing ? (
+                                                        <div className="w-3 h-3 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                                                    ) : (
+                                                        <MagicWandIcon className="w-3 h-3" />
+                                                    )}
+                                                    {isOptimizing ? '最適化中...' : 'AIでプロンプトを最適化'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-2 justify-end pt-4 border-t border-slate-100">
+                                            <button onClick={() => setIsEditingPreset(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded">キャンセル</button>
+                                            <button onClick={saveUsagePreset} className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700">保存</button>
                                         </div>
                                     </div>
                                 </div>
